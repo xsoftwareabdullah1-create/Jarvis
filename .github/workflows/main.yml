@@ -22,18 +22,25 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install Android SDK
-        run: |
-          yes | sdkmanager --licenses || true
-          sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
-
-      - name: Install Gradle 8.2.1
+      - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.2.1"
+
+      - name: Check Android SDK
+        run: |
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
+          ls -la "$ANDROID_SDK_ROOT/platforms" || true
+          ls -la "$ANDROID_SDK_ROOT/build-tools" || true
+
+      - name: Install Android 34 components
+        run: |
+          yes | "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --licenses || true
+          "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" \
+            "platform-tools" \
+            "platforms;android-34" \
+            "build-tools;34.0.0"
 
       - name: Build APK
         run: |
@@ -41,7 +48,6 @@ jobs:
 
       - name: Find APK
         run: |
-          echo "APK files:"
           find . -type f -name "*.apk" -print
 
       - name: Prepare APK
@@ -51,13 +57,13 @@ jobs:
           APK=$(find app/build/outputs/apk/release -type f -name "*.apk" | head -n 1)
 
           if [ -z "$APK" ]; then
-            echo "ERROR: APK was not generated."
+            echo "APK NOT FOUND"
             exit 1
           fi
 
           cp "$APK" output/Jarvis.apk
 
-          echo "SUCCESS:"
+          echo "JARVIS APK:"
           ls -lh output/Jarvis.apk
 
       - name: Upload APK
