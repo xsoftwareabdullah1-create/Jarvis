@@ -1,0 +1,19 @@
+plugins { id 'com.android.application' }
+
+android {
+    namespace 'com.jarvis.local'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'com.jarvis.local'
+        minSdk 26
+        targetSdk 34
+        versionCode 3
+        versionName '3.0'
+    }
+
+    buildTypes {
+        release { minifyEnabled false }
+        debug { minifyEnabled false }
+    }
+}
