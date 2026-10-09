@@ -1,0 +1,51 @@
+
+workflows:
+  jarvis-android:
+    name: Build JARVIS APK
+    max_build_duration: 60
+    instance_type: linux_x2
+
+    scripts:
+      - name: Check Android project
+        script: |
+          echo "Checking project files..."
+          ls -la
+          if [ ! -f gradlew ]; then
+            echo "ERROR: gradlew not found in repository root."
+            exit 1
+          fi
+          chmod +x gradlew
+
+      - name: Configure Android SDK
+        script: |
+          echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
+          java -version
+          ./gradlew --version
+
+      - name: Build release APK
+        script: |
+          set -e
+          ./gradlew --no-daemon --stacktrace assembleRelease
+
+      - name: Name and verify APK
+        script: |
+          set -e
+          APK=$(find . -type f -path "*/build/outputs/apk/*/*.apk" \
+            ! -path "*/build/outputs/apk/*/androidTest/*" \
+            | head -n 1)
+
+          if [ -z "$APK" ]; then
+            echo "ERROR: No APK was generated."
+            find . -path "*/build/outputs/*" -type f
+            exit 1
+          fi
+
+          mkdir -p "$CM_BUILD_DIR/output"
+          cp "$APK" "$CM_BUILD_DIR/output/Jarvis.apk"
+          ls -lh "$CM_BUILD_DIR/output/Jarvis.apk"
+
+    artifacts:
+      - output/Jarvis.apk
+      - "**/build/outputs/**/*.apk"
+      - "**/build/reports/**/*.html"
+      
