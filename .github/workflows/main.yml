@@ -3,7 +3,8 @@ name: Build JARVIS APK
 
 on:
   push:
-    branches: ["**"]
+    branches:
+      - "**"
   workflow_dispatch:
 
 permissions:
@@ -26,57 +27,120 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
         with:
-          packages: "platform-tools platforms;android-34 build-tools;34.0.0"
+          packages: |
+            platform-tools
+            platforms;android-34
+            build-tools;34.0.0
+          accept-android-sdk-licenses: true
+          log-accepted-android-sdk-licenses: true
+
+      - name: Accept Android SDK licenses
+        shell: bash
+        run: |
+          set -e
+          yes | sdkmanager --licenses || true
 
       - name: Locate Android project
         shell: bash
         run: |
-          if [ -f settings.gradle ] && [ -f app/build.gradle ]; then
-            echo "PROJECT_DIR=." >> "$GITHUB_ENV"
-          elif [ -f jarvis_final/settings.gradle ] && [ -f jarvis_final/app/build.gradle ]; then
-            echo "PROJECT_DIR=jarvis_final" >> "$GITHUB_ENV"
+          set -e
+
+          echo "Searching for Android project..."
+
+          if [ -f "settings.gradle" ] || [ -f "settings.gradle.kts" ]; then
+            PROJECT_DIR="."
+          elif [ -f "jarvis_final/settings.gradle" ] || \
+               [ -f "jarvis_final/settings.gradle.kts" ]; then
+            PROJECT_DIR="jarvis_final"
           else
-            echo "ERROR: Android project files not found"
-            find . -maxdepth 4 -type f | head -150
+            PROJECT_DIR=""
+
+            while IFS= read -r file; do
+              dir=$(dirname "$file")
+
+              if [ -f "$dir/app/build.gradle" ] || \
+                 [ -f "$dir/app/build.gradle.kts" ]; then
+                PROJECT_DIR="$dir"
+                break
+              fi
+            done < <(
+              find . -maxdepth 5 \
+                \( -name settings.gradle -o \
+                   -name settings.gradle.kts \) \
+                -type f -print
+            )
+          fi
+
+          if [ -z "$PROJECT_DIR" ]; then
+            echo "ERROR: Android project not found."
+            echo "Repository files:"
+            find . -maxdepth 4 -type f | head -200
             exit 1
           fi
 
-      - name: Verify Android SDK
+          if [ ! -f "$PROJECT_DIR/app/build.gradle" ] && \
+             [ ! -f "$PROJECT_DIR/app/build.gradle.kts" ]; then
+            echo "ERROR: App module Gradle file not found."
+            find "$PROJECT_DIR" -maxdepth 4 -type f
+            exit 1
+          fi
+
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+          echo "Android project found: $PROJECT_DIR"
+
+      - name: Verify Java and Android SDK
+        shell: bash
         run: |
+          java -version
           echo "ANDROID_HOME=$ANDROID_HOME"
           echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
           sdkmanager --list_installed
-          java -version
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: "8.2.1"
 
       - name: Build release APK
         shell: bash
         run: |
+          set -e
           cd "$PROJECT_DIR"
-          gradle --no-daemon --stacktrace assembleRelease
+
+          if [ -f "./gradlew" ]; then
+            chmod +x ./gradlew
+            ./gradlew --no-daemon --stacktrace assembleRelease
+          elif command -v gradle >/dev/null 2>&1; then
+            gradle --no-daemon --stacktrace assembleRelease
+          else
+            echo "ERROR: Gradle wrapper and Gradle command not found."
+            exit 1
+          fi
 
       - name: Prepare APK
         shell: bash
         run: |
+          set -e
+
           mkdir -p output
-          APK=$(find "$PROJECT_DIR/app/build/outputs/apk/release" \
-            -type f -name "*.apk" -print -quit)
+
+          APK=$(find "$PROJECT_DIR/app/build/outputs/apk" \
+            -type f -name "*.apk" -print -quit 2>/dev/null || true)
 
           if [ -z "$APK" ]; then
-            echo "ERROR: Release APK was not generated"
+            echo "ERROR: APK was not generated."
+            echo "Searching build outputs..."
+            find "$PROJECT_DIR" -path "*/build/outputs/*" -type f
             exit 1
           fi
 
           cp "$APK" output/Jarvis.apk
+
+          echo "APK created successfully:"
           ls -lh output/Jarvis.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Jarvis
+          name: Jarvis-APK
           path: output/Jarvis.apk
           if-no-files-found: error
+          retention-days: 7
