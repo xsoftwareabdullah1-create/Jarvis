@@ -1,16 +1,4 @@
-      - name: Build APK
-        run: |
-          echo "===== PROJECT FILES ====="
-          find . -maxdepth 3 -type f | sort
-
-          echo "===== GRADLE VERSION ====="
-          gradle --version
-
-          echo "===== BUILD ====="
-          gradle --no-daemon --stacktrace --info assembleReleasename: Build JARVIS APK
-
-- name: Jarvis APK
-
+name: Build JARVIS APK
 
 on:
   push:
@@ -25,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Setup Java 17
@@ -34,51 +22,40 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: "8.2.1"
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
 
-      - name: Check Android SDK
+      - name: Install Android SDK 34
         run: |
-          echo "ANDROID_HOME=$ANDROID_HOME"
-          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
-          ls -la "$ANDROID_SDK_ROOT/platforms" || true
-          ls -la "$ANDROID_SDK_ROOT/build-tools" || true
-
-      - name: Install Android 34 components
-        run: |
-          yes | "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --licenses || true
-          "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" \
+          yes | sdkmanager --licenses
+          sdkmanager \
             "platform-tools" \
             "platforms;android-34" \
             "build-tools;34.0.0"
 
-      - name: Build APK
-        run: |
-          gradle --no-daemon --stacktrace assembleRelease
+      - name: Setup Gradle 8.2.1
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.2.1"
 
-      - name: Find APK
-        run: |
-          find . -type f -name "*.apk" -print
+      - name: Build JARVIS Release APK
+        run: gradle --no-daemon --stacktrace assembleRelease
 
-      - name: Prepare APK
+      - name: Locate and rename APK
         run: |
           mkdir -p output
-
-          APK=$(find app/build/outputs/apk/release -type f -name "*.apk" | head -n 1)
+          APK=$(find app/build/outputs/apk/release \
+            -type f -name "*.apk" -print -quit)
 
           if [ -z "$APK" ]; then
-            echo "APK NOT FOUND"
+            echo "ERROR: Release APK not found"
             exit 1
           fi
 
           cp "$APK" output/Jarvis.apk
-
-          echo "JARVIS APK:"
           ls -lh output/Jarvis.apk
 
-      - name: Upload APK
+      - name: Upload JARVIS APK
         uses: actions/upload-artifact@v4
         with:
           name: Jarvis
