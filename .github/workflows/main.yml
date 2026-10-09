@@ -1,3 +1,4 @@
+
 name: Build JARVIS APK
 
 on:
@@ -12,17 +13,13 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
+    defaults:
+      run:
+        shell: bash
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
-      - name: Locate Android project
-        run: |
-          if [ ! -f settings.gradle ] && [ -f jarvis_final/settings.gradle ]; then
-            echo "PROJECT_DIR=jarvis_final" >> "$GITHUB_ENV"
-          else
-            echo "PROJECT_DIR=." >> "$GITHUB_ENV"
-          fi
 
       - name: Setup Java 17
         uses: actions/setup-java@v4
@@ -30,26 +27,32 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: "8.2.1"
-
-      - name: Install Android SDK components
+      - name: Locate Android project
         run: |
-          SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
-          echo "Using Android SDK: $SDK"
-
-          SDKMANAGER=$(find "$SDK/cmdline-tools" \
-            -type f -name sdkmanager 2>/dev/null | head -n 1)
-
-          if [ -z "$SDKMANAGER" ]; then
-            echo "ERROR: sdkmanager not found at $SDK"
+          if [ -f "settings.gradle" ] && [ -f "app/build.gradle" ]; then
+            echo "PROJECT_DIR=." >> "$GITHUB_ENV"
+          elif [ -f "jarvis_final/settings.gradle" ] && [ -f "jarvis_final/app/build.gradle" ]; then
+            echo "PROJECT_DIR=jarvis_final" >> "$GITHUB_ENV"
+          else
+            echo "ERROR: Android project files not found."
+            find . -maxdepth 3 -type f | sort | head -200
             exit 1
           fi
 
-          yes | "$SDKMANAGER" --licenses || true
-          "$SDKMANAGER" "platforms;android-34" "build-tools;34.0.0"
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install SDK components
+        run: |
+          sdkmanager --install \
+            "platform-tools" \
+            "platforms;android-34" \
+            "build-tools;34.0.0"
+
+      - name: Setup Gradle 8.2.1
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.2.1"
 
       - name: Build release APK
         run: |
@@ -59,11 +62,12 @@ jobs:
       - name: Prepare APK
         run: |
           mkdir -p output
+
           APK=$(find "$PROJECT_DIR/app/build/outputs/apk/release" \
             -type f -name "*.apk" -print -quit)
 
           if [ -z "$APK" ]; then
-            echo "ERROR: Release APK not found"
+            echo "ERROR: Release APK was not generated."
             exit 1
           fi
 
