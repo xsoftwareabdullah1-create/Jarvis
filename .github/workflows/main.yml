@@ -1,4 +1,3 @@
-
 name: Build JARVIS APK
 
 on:
@@ -32,20 +31,11 @@ jobs:
             platforms;android-34
             build-tools;34.0.0
           accept-android-sdk-licenses: true
-          log-accepted-android-sdk-licenses: true
-
-      - name: Accept Android SDK licenses
-        shell: bash
-        run: |
-          set -e
-          yes | sdkmanager --licenses || true
 
       - name: Locate Android project
         shell: bash
         run: |
           set -e
-
-          echo "Searching for Android project..."
 
           if [ -f "settings.gradle" ] || [ -f "settings.gradle.kts" ]; then
             PROJECT_DIR="."
@@ -57,23 +47,20 @@ jobs:
 
             while IFS= read -r file; do
               dir=$(dirname "$file")
-
               if [ -f "$dir/app/build.gradle" ] || \
                  [ -f "$dir/app/build.gradle.kts" ]; then
                 PROJECT_DIR="$dir"
                 break
               fi
             done < <(
-              find . -maxdepth 5 \
+              find . -maxdepth 5 -type f \
                 \( -name settings.gradle -o \
-                   -name settings.gradle.kts \) \
-                -type f -print
+                   -name settings.gradle.kts \)
             )
           fi
 
           if [ -z "$PROJECT_DIR" ]; then
             echo "ERROR: Android project not found."
-            echo "Repository files:"
             find . -maxdepth 4 -type f | head -200
             exit 1
           fi
@@ -89,7 +76,6 @@ jobs:
           echo "Android project found: $PROJECT_DIR"
 
       - name: Verify Java and Android SDK
-        shell: bash
         run: |
           java -version
           echo "ANDROID_HOME=$ANDROID_HOME"
@@ -111,7 +97,7 @@ jobs:
           elif command -v gradle >/dev/null 2>&1; then
             gradle --no-daemon --stacktrace assembleRelease
           else
-            echo "ERROR: Gradle wrapper and Gradle command not found."
+            echo "ERROR: Gradle wrapper and Gradle not found."
             exit 1
           fi
 
@@ -119,7 +105,6 @@ jobs:
         shell: bash
         run: |
           set -e
-
           mkdir -p output
 
           APK=$(find "$PROJECT_DIR/app/build/outputs/apk" \
@@ -127,14 +112,11 @@ jobs:
 
           if [ -z "$APK" ]; then
             echo "ERROR: APK was not generated."
-            echo "Searching build outputs..."
             find "$PROJECT_DIR" -path "*/build/outputs/*" -type f
             exit 1
           fi
 
           cp "$APK" output/Jarvis.apk
-
-          echo "APK created successfully:"
           ls -lh output/Jarvis.apk
 
       - name: Upload APK
