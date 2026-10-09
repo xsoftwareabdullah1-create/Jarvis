@@ -1,4 +1,16 @@
-name: Build JARVIS APK
+      - name: Build APK
+        run: |
+          echo "===== PROJECT FILES ====="
+          find . -maxdepth 3 -type f | sort
+
+          echo "===== GRADLE VERSION ====="
+          gradle --version
+
+          echo "===== BUILD ====="
+          gradle --no-daemon --stacktrace --info assembleReleasename: Build JARVIS APK
+
+- name: Jarvis APK
+
 
 on:
   push:
