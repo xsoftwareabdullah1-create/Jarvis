@@ -13,10 +13,6 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
-    defaults:
-      run:
-        shell: bash
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -29,27 +25,51 @@ jobs:
 
       - name: Locate Android project
         run: |
-          if [ -f "settings.gradle" ] && [ -f "app/build.gradle" ]; then
+          if [ -f settings.gradle ] && [ -f app/build.gradle ]; then
             echo "PROJECT_DIR=." >> "$GITHUB_ENV"
-          elif [ -f "jarvis_final/settings.gradle" ] && [ -f "jarvis_final/app/build.gradle" ]; then
+          elif [ -f jarvis_final/settings.gradle ] && [ -f jarvis_final/app/build.gradle ]; then
             echo "PROJECT_DIR=jarvis_final" >> "$GITHUB_ENV"
           else
-            echo "ERROR: Android project files not found."
-            find . -maxdepth 3 -type f | sort | head -200
+            echo "ERROR: Project files not found"
+            find . -maxdepth 3 -type f | head -100
             exit 1
           fi
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install SDK components
+      - name: Locate and install Android SDK
         run: |
-          sdkmanager --install \
+          SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+
+          if [ ! -d "$SDK" ]; then
+            SDK="${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}"
+          fi
+
+          SDKMANAGER=$(find "$SDK/cmdline-tools" \
+            -type f -name sdkmanager 2>/dev/null | head -1)
+
+          if [ -z "$SDKMANAGER" ]; then
+            echo "Searching runner for sdkmanager..."
+            SDKMANAGER=$(find /usr/local/lib/android \
+              -type f -name sdkmanager 2>/dev/null | head -1)
+          fi
+
+          if [ -z "$SDKMANAGER" ]; then
+            echo "ERROR: Android SDK Manager not found"
+            exit 1
+          fi
+
+          SDK=$(dirname "$(dirname "$(dirname "$SDKMANAGER")")")
+          echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
+          echo "$SDK/platform-tools" >> "$GITHUB_PATH"
+
+          yes | "$SDKMANAGER" --sdk_root="$SDK" --licenses || true
+
+          "$SDKMANAGER" --sdk_root="$SDK" \
             "platform-tools" \
             "platforms;android-34" \
             "build-tools;34.0.0"
 
-      - name: Setup Gradle 8.2.1
+      - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.2.1"
@@ -67,7 +87,7 @@ jobs:
             -type f -name "*.apk" -print -quit)
 
           if [ -z "$APK" ]; then
-            echo "ERROR: Release APK was not generated."
+            echo "ERROR: APK not generated"
             exit 1
           fi
 
